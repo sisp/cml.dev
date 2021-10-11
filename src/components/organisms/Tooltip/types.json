@@ -14,5 +14,21 @@
   "tensorboard": {
     "color": "#B6E8ED",
     "title": "Create tensorboard"
+  },
+  "runner": {
+    "color": "#1de5d6",
+    "title": "Launch Cloud Runner"
+  },
+  "tip": {
+    "color": "#bd317e",
+    "title": "Keep an eye!"
+  },
+  "image": {
+    "color": "#891de5",
+    "title": "Use our images or your own ones"
+  },
+  "pr": {
+    "color": "#c70c6a",
+    "title": "CML will create a PR/MR for you"
   }
 }

@@ -154,7 +154,11 @@ services: AWS, Azure, GCP. No databases, services or complex setup needed.
   my: "40px"
 }}>
 
-The simplest case of using CML, and a clear way for any user to get started, is to generate a simple report. Add the following .yaml to your project repository and commit to get started
+Deploy a CML spot cloud runner to train your model. 
+
+Track your metrics with tensorboard and publish an insightful report.
+
+Create a CML PR/MR to preserve your work.
 
 </Box>
 
@@ -163,132 +167,76 @@ The simplest case of using CML, and a clear way for any user to get started, is 
 <JSONTabs
   sx={{ "code, img": {maxHeight: "580px"} }}
   content={[
-  {
-    name: "First CML Report",
+    {
+    name: "CML",
     filename: "cml.yaml",
     content: (
       <Switchable
         gitlab={(
 <Collapser>
 
-```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/cml-base-case"
+```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/fashion-mnist"
 stages:
-  - cml_run
+  - deploy
+  - run
 
-cml:
-  stage: cml_run
-  image: dvcorg/cml-py3:latest
+deploy-runner:
+  stage: deploy
+  when: always
+  image: dvcorg/cml:0-dvc2-base1
   script:
-    <Tooltip type="dependencies">
-    - pip3 install -r requirements.txt
-    - python train.py
+  <Tooltip type="runner">
+    - cml-runner  
+      --cloud-spot 
+      --cloud aws  
+      --cloud-region us-west  
+      --cloud-type t2.medium 
+      <Tooltip type="tip">
+      --labels=cml-runner
+      </Tooltip>
+  </Tooltip>
+
+run:
+ <Tooltip type="tip">
+  timeout: 5000 minutes
+ </Tooltip>
+  stage: run
+  when: on_success
+  tags:
+    <Tooltip type="tip">
+    - cml-runner
     </Tooltip>
-
-    <Tooltip type="reports">
-    - cat metrics.txt >> report.md
-    - cml-publish confusion_matrix.png --md >> report.md
-    - cml-send-comment report.md
-    </Tooltip>
-```
-
-<ExampleBox title="CML Report">
-
-
-[![GitLab Base report example](../src/media/gitlab/base-case-report.png)](https://gitlab.com/iterative.ai/cml-base-case/-/merge_requests/3)
-
-
-</ExampleBox>
-
-</Collapser>
-        )}
-        github={(
-<Collapser>
-
-```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/cml_base_case"
-name: train-my-model
-
-on: [push]
-
-jobs:
-  run:
-    runs-on: [ubuntu-latest]
-
-    steps:
-      - uses: actions/checkout@v2
-      
-      - uses: iterative/setup-cml@v1
-
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
-
-      - name: cml
-        env:
-          repo_token: { "${{ secrets.GITHUB_TOKEN }}" }
-        run: |
-          <Tooltip type="dependencies">
-          pip3 install -r requirements.txt
-          python train.py
-          </Tooltip>
-
-          <Tooltip type="reports">
-          cat metrics.txt >> report.md
-          cml-publish confusion_matrix.png --md >> report.md
-          cml-send-comment report.md
-          </Tooltip>
-```
-
-<ExampleBox title="CML Report">
-
-[![GitHub Base report example](../src/media/github/base-case-report.png)](https://github.com/iterative/cml_base_case/pull/2)
-
-</ExampleBox>
-
-</Collapser>
-        )}
-      />
-    )
-  },
-  {
-    name: "DVC",
-    content: (
-      <Switchable
-        gitlab={(
-<Collapser>
-
-```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/cml-dvc-case"
-stages:
-  - cml_run
-
-cml:
-  stage: cml_run
-  image: dvcorg/cml-py3:latest
+  image: dvcorg/cml:0-dvc2-base1
   script:
-    <Tooltip type="dvc">
-    - dvc pull data
-    </Tooltip>
-
-    <Tooltip type="dependencies">
+    - sudo apt update && sudo apt install awscli
     - pip install -r requirements.txt
-    - dvc repro
+    
+    <Tooltip type="tensorboard">
+    - TB_URL="NOT READY"
+    </Tooltip>
+    <Tooltip type="reports">
+    - echo "# CML report" > report.md
+    - echo $TB_URL >> report.md
+    - cml-send-comment report.md
     </Tooltip>
 
-    # Compare metrics to master
-    - git fetch --prune
-    - dvc metrics diff --show-md master >> report.md
-
-    # Visualize loss function diff
-    - dvc plots diff 
-      --target loss.csv --show-vega master > vega.json
+    - python train.py
+    
     <Tooltip type="reports">
-    - vl2png vega.json | cml-publish --md >> report.md
+    - echo "# CML report" > report.md
+    <Tooltip type="pr">
+    - cml-pr --md output/* >> report.md
+    </Tooltip>
+    - echo $TB_URL >> report.md
+    - cat output/metrics.txt >> report.md
+    - cml-publish output/confusion_matrix.png --md >> report.md
     - cml-send-comment report.md
     </Tooltip>
 ```
 
 <ExampleBox title="CML Report">
 
-[![GitLab DVC report example](../src/media/gitlab/dvc-report.png)](https://gitlab.com/iterative.ai/cml-dvc-case/-/merge_requests/6)
+[![GitLab Base report example](../src/media/gitlab/report.v5.png)](https://gitlab.com/iterative.ai/fashion-mnist)
 
 </ExampleBox>
 
@@ -297,275 +245,94 @@ cml:
         github={(
 <Collapser>
 
-```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/cml_dvc_case"
+```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/fashion-mnist"
 name: train-my-model
 
 on: [push]
 
 jobs:
-  run:
+  deploy-runner:
+    env:
+      REPO_TOKEN: { "${{ secrets.REPO_TOKEN }}" }
+      AWS_ACCESS_KEY_ID: { "${{ secrets.AWS_ACCESS_KEY_ID }}" }
+      AWS_SECRET_ACCESS_KEY: { "${{ secrets.AWS_SECRET_ACCESS_KEY }}" }
+
     runs-on: [ubuntu-latest]
-  
     steps:
       - uses: actions/checkout@v2
-
       - uses: iterative/setup-cml@v1
 
-      - uses: iterative/setup-dvc@v1
-
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
-
-      - name: cml
-        env:
-          repo_token: { "${{ secrets.GITHUB_TOKEN }}" }
-          <Tooltip type="dvc">
-          AWS_ACCESS_KEY_ID: { "${{ secrets.KEY_ID }}" }
-          AWS_SECRET_ACCESS_KEY: { "${{ secrets.KEY }}" }
-          </Tooltip>
+      - name: deploy
+        shell: bash
         run: |
-          <Tooltip type="dvc">
-          dvc pull data
+          <Tooltip type="runner">
+          cml-runner \
+          --cloud-spot \
+          --cloud aws \
+          --cloud-region us-west \
+          --cloud-type t2.medium \
+          <Tooltip type="tip">
+          --labels cml-runner
           </Tooltip>
-          
-          <Tooltip type="dependencies">
-          pip install -r requirements.txt
-          dvc repro
           </Tooltip>
 
-          # Compare metrics to master
-          git fetch --prune 
-          dvc metrics diff --show-md master >> report.md
+  run:
+    <Tooltip type="tip">
+    timeout-minutes: 5000
+    </Tooltip>
+    runs-on: [
+      self-hosted,
+      <Tooltip type="tip">
+      cml-runner
+      </Tooltip>
+    ]
+    needs: deploy-runner
+    container: 
+      <Tooltip type="image">
+      image: docker://dvcorg/cml:0-dvc2-base1
+      </Tooltip>
 
-          # Visualize loss function diff
-          dvc plots diff \
-            --target loss.csv --show-vega master > vega.json
-          <Tooltip type="reports">
-          vl2png vega.json -s 1.5 | cml-publish --md  >> report.md
-          cml-send-comment report.md 
-          </Tooltip>
-```
+    steps:
+    - uses: actions/checkout@v2
 
-<ExampleBox title="CML Report">
-
-[![GitHub DVC report example](../src/media/github/dvc-report.png)](https://github.com/iterative/cml_dvc_case/pull/4)
-
-</ExampleBox>
-
-</Collapser>
-        )}
-      />
-    )
-  },
-  {
-    name: "Tensorboard",
-    content: (
-      <Switchable
-        gitlab={(
-<Collapser>
-
-```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/cml-tensorboard-case"
-stages: 
-    - cml_run
-    
-cml:
-    stage: cml_run
-    image: dvcorg/cml-py3:latest
-    script:
-        - pip install -r requirements.txt
+    - name: cml 
+      env:
+        REPO_TOKEN: { "${{ secrets.REPO_TOKEN }}" }
+        AWS_ACCESS_KEY_ID: { "${{ secrets.AWS_ACCESS_KEY_ID }}" }
+        AWS_SECRET_ACCESS_KEY: { "${{ secrets.AWS_SECRET_ACCESS_KEY }}" }
+        AWS_DEFAULT_REGION: us-east-1
+        AWS_EC2_METADATA_DISABLED: true
+        TB_CREDENTIALS: { "${{ secrets.TB_CREDENTIALS }}" }
+      run: |
+        sudo apt update && sudo apt install awscli
+        pip install -r requirements.txt
+        
         <Tooltip type="tensorboard">
-        - cml-tensorboard-dev \
-            --logdir logs \
-            --name "Go to tensorboard" \
-            --md >> report.md
+        TB_URL="NOT READY"
         </Tooltip>
         <Tooltip type="reports">
-        - cml-send-comment report.md
+        echo "# CML report" > report.md
+        echo $TB_URL >> report.md
+        cml-send-comment --update report.md
         </Tooltip>
 
-        <Tooltip type="dependencies">
-        - python train.py
-        </Tooltip>
-
-```
-
-<ExampleBox title="CML Report">
-
-[![GitLab Tensorboard report example](../src/media/gitlab/tensorboard-report.png)](https://gitlab.com/iterative.ai/cml-tensorboard-case/-/merge_requests/2)
-
-</ExampleBox>
-
-</Collapser>
-        )}
-        github={(
-<Collapser>
-
-```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/cml_tensorboard_case"
-name: train-my-model
-
-on: [push]
-
-jobs:
-  run:
-    runs-on: [ubuntu-latest]
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: iterative/setup-cml@v1
-      
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.6'
-
-      - name: cml
-        env:
-          repo_token: { "${{ secrets.GITHUB_TOKEN }}" }
-          <Tooltip type="tensorboard">
-          TB_CREDENTIALS: { "${{ secrets.TB_CRED }}" }
-          </Tooltip>
-        run: |
-          pip install -r requirements.txt
-
-          <Tooltip type="tensorboard">
-          cml-tensorboard-dev \
-            --logdir logs \
-            --name "Go to tensorboard" \
-            --md >> report.md
-          </Tooltip>
-          <Tooltip type="reports">
-          cml-send-comment report.md
-          </Tooltip>
-
-          <Tooltip type="dependencies">
-          python train.py
-          </Tooltip>
-```
-
-<ExampleBox title="CML Report">
-
-[![GitHub Tensorboard report example](../src/media/github/tensorboard-report.png)](https://github.com/iterative/cml_tensorboard_case/pull/1)
-
-</ExampleBox>
-
-</Collapser>
-        )}
-      />
-    )
-  },
-  ,
-  {
-    name: "CML Runner Cloud",
-    content: (
-      <Switchable
-        gitlab={(
-<Collapser>
-
-```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/cml-runner-example"
-stages:
-  - deploy
-  - train
-
-deploy_job:
-  stage: deploy
-  when: always
-  image: dvcorg/cml
-  script:
-    <Tooltip type="reports">
-    - cml-runner
-      --cloud aws
-      --cloud-region us-west
-      --cloud-type t2.micro
-      --labels=cml-runner
-    </Tooltip>
-
-train_job:
- <Tooltip type="reports">
-  stage: train
-  when: on_success
-  image: dvcorg/cml-py3
-  tags:
-    - cml-runner
-  </Tooltip>
-
-  script:
-    - pip install -r requirements.txt
-    - python train.py
-
-    - echo "## Report from your EC2 Instance" > report.md
-    - cat metrics.txt >> report.md
-    - cml-publish "confusion_matrix.png" --md >> report.md
-    - cml-send-comment report.md
-
-```
-
-<ExampleBox title="CML Report">
-
-[![GitLab Cloud report example](../src/media/gitlab/cml-runner-report.png)](https://gitlab.com/iterative.ai/cml-runner-example/-/merge_requests/2)
-
-</ExampleBox>
-
-</Collapser>
-        )}
-        github={(
-<Collapser>
-
-```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/cml-runner-base-case"
-name: Train-in-the-cloud
-
-on: [push]
-
-jobs:
-  deploy-runner:
-    runs-on: [ubuntu-latest]
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: iterative/setup-cml@v1
-
-      - name: deploy
-        shell: bash
-        env:
-          repo_token: { "${{ secrets.PERSONAL_ACCESS_TOKEN }}" }
-          AWS_ACCESS_KEY_ID: { "${{ secrets.AWS_ACCESS_KEY_ID }}" }
-          AWS_SECRET_ACCESS_KEY: { "${{ secrets.AWS_SECRET_ACCESS_KEY }}" }
-        run: |
-          <Tooltip type="reports">
-          cml-runner \
-          --cloud aws \
-          --cloud-region us-west \
-          --cloud-type=t2.micro \
-          --labels=cml-runner
-          </Tooltip>
-
-  model-training:
-    <Tooltip type="reports">
-    needs: deploy-runner
-    runs-on: [self-hosted,cml-runner]
-    container: docker://dvcorg/cml-py3
-    </Tooltip>
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: "Train my model"
-      env:
-        repo_token: { "${{ secrets.PERSONAL_ACCESS_TOKEN }}" }
-      run: |
-        python --version
-        pip install -r requirements.txt
         python train.py
-
-        echo "## Report from your EC2 Instance" > report.md
-        cat metrics.txt >> report.md
-        cml-publish "confusion_matrix.png" --md >> report.md
-        cml-send-comment report.md
+        
+        <Tooltip type="reports">
+        echo "# CML report" > report.md
+        <Tooltip type="pr">
+        cml-pr --md output/* >> report.md
+        </Tooltip>
+        echo $TB_URL >> report.md
+        cat output/metrics.txt >> report.md
+        cml-publish output/confusion_matrix.png --md >> report.md
+        cml-send-comment --update report.md
+        </Tooltip>
 ```
 
 <ExampleBox title="CML Report">
 
-[![GitHub Cloud report example](../src/media/github/cml-runner-report.png)](https://github.com/iterative/cml-runner-base-case/pull/4)
+[![GitHub Base report example](../src/media/github/report.v2.png)](https://github.com/iterative/fashion-mnist)
 
 </ExampleBox>
 
@@ -574,77 +341,79 @@ jobs:
       />
     )
   },
-  ,
   {
-    name: "Advanced GPU Case",
+    name: "CML + DVC",
     content: (
       <Switchable
         gitlab={(
 <Collapser>
 
-```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/cml-cloud-case"
+```yml filename=".gitlab-ci.yml" repo="https://gitlab.com/iterative.ai/fashion-mnist"
 stages:
   - deploy
-  - train
+  - run
 
-deploy_job:
+deploy-runner:
   stage: deploy
   when: always
-  image: dvcorg/cml
+  image: dvcorg/cml:0-dvc2-base1
   script:
-    <Tooltip type="reports">
-    - cml-runner \
-      --cloud aws \
-      --cloud-region us-west \
-      --cloud-type=g3.4xlarge \
-      --cloud-hdd-size 64 \
-      --labels=cml-runner-gpu
-    </Tooltip>
-
-train_job:
-  <Tooltip type="reports">
-  stage: train
-  when: on_success
-  image: dvcorg/cml-py3
-  tags:
-    - cml-runner-gpu
+  <Tooltip type="runner">
+    - cml-runner  
+      --cloud-spot 
+      --cloud aws  
+      --cloud-region us-west  
+      --cloud-type t2.medium 
+      <Tooltip type="tip">
+      --labels=cml-runner
+      </Tooltip>
   </Tooltip>
 
+run:
+  <Tooltip type="tip">
+  timeout: 5000 minutes
+  </Tooltip>
+  stage: run
+  when: on_success
+  tags:
+    <Tooltip type="tip">
+    - cml-runner
+    </Tooltip>
+  image: dvcorg/cml:0-dvc2-base1
   script:
-    - apt-get update -y
-    - apt-get install python3-dev -y
-    - apt install imagemagick -y
+    - sudo apt update && sudo apt install awscli
     - pip install -r requirements.txt
     
-    # DVC reproduce neural style transfer training
-    - git fetch --prune
-    - dvc repro
-    
-    # Compare master and workspace image results
-    - echo "# Style transfer" >> report.md
-    - git show origin/master:final_owl.png > master_owl.png
-    - convert +append final_owl.png master_owl.png out.png
-    - convert out.png -resize 75% out_shrink.png
-    - echo "### Workspace vs. Master" >> report.md
-    - cml-publish out_shrink.png --md >> report.md
-    
-    # Report training parameters
-    - echo "## Training parameter diffs" >> report.md
-    - dvc params diff master --show-md >> report.md
-    - echo >> report.md
-    
-    # Report GPU details
-    - echo "## GPU info" >> report.md
-    - cat gpu_info.txt >> report.md
-    
-    - cml-send-comment report.md 
+    <Tooltip type="tensorboard">
+    - TB_URL="NOT READY"
+    </Tooltip>
+    <Tooltip type="reports">
+    - echo "# CML report" > report.md
+    - echo $TB_URL >> report.md
+    - cml-send-comment report.md
+    </Tooltip>
 
-
+    <Tooltip type="dvc">
+    - dvc pull || echo "First pull might fail"
+    - dvc exp run
+    - dvc push
+    </Tooltip>
+    
+    <Tooltip type="reports">
+    - echo "# CML report" > report.md
+    <Tooltip type="pr">
+    - cml-pr --md output/* >> report.md
+    </Tooltip>
+    - echo $TB_URL >> report.md
+    - cat output/metrics.txt >> report.md
+    - cml-publish output/confusion_matrix.png --md >> report.md
+    - cml-send-comment report.md
+    </Tooltip>
 ```
 
 <ExampleBox title="CML Report">
 
-[![GitLab Cloud report example](../src/media/gitlab/cloud-report.png)](https://gitlab.com/iterative.ai/cml-cloud-case/-/merge_requests/1)
+[![GitLab Base report example](../src/media/gitlab/report.v5.png)](https://gitlab.com/iterative.ai/fashion-mnist)
 
 </ExampleBox>
 
@@ -653,85 +422,98 @@ train_job:
         github={(
 <Collapser>
 
-```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/cml_cloud_case"
+```yml filename=".github/workflows/cml.yaml" repo="https://github.com/iterative/fashion-mnist"
 name: train-my-model
 
 on: [push]
 
 jobs:
   deploy-runner:
+    env:
+      REPO_TOKEN: { "${{ secrets.REPO_TOKEN }}" }
+      AWS_ACCESS_KEY_ID: { "${{ secrets.AWS_ACCESS_KEY_ID }}" }
+      AWS_SECRET_ACCESS_KEY: { "${{ secrets.AWS_SECRET_ACCESS_KEY }}" }
+
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v2
-
       - uses: iterative/setup-cml@v1
 
       - name: deploy
         shell: bash
-        env:
-          repo_token: { "${{ secrets.secrets.PERSONAL_ACCESS_TOKEN }}" }
-          AWS_ACCESS_KEY_ID: { "${{ secrets.AWS_ACCESS_KEY_ID }}" }
-          AWS_SECRET_ACCESS_KEY: { "${{ secrets.AWS_SECRET_ACCESS_KEY }}" } 
         run: |
-          <Tooltip type="reports">
+          <Tooltip type="runner">
           cml-runner \
+          --cloud-spot \
           --cloud aws \
           --cloud-region us-west \
-          --cloud-type=g3.4xlarge \
-          --cloud-hdd-size 64 \
-          --labels=cml-runner
+          --cloud-type t2.medium \
+          <Tooltip type="tip">
+          --labels cml-runner
+          </Tooltip>
           </Tooltip>
 
   run:
-    <Tooltip type="reports">
+    <Tooltip type="tip">
+    timeout-minutes: 5000
+    </Tooltip>
+    runs-on: [
+      self-hosted,
+      <Tooltip type="tip">
+      cml-runner
+      </Tooltip>
+    ]
     needs: deploy-runner
-    runs-on: [self-hosted,cml-runner]
     container: 
-      image: docker://dvcorg/cml
-    </Tooltip>
-    <Tooltip type="tensorboard">
-      options: --gpus all
-    </Tooltip>
+      <Tooltip type="image">
+      image: docker://dvcorg/cml:0-dvc2-base1
+      </Tooltip>
 
     steps:
     - uses: actions/checkout@v2
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.6'
-
-    - name: cml
+    - name: cml 
       env:
-        repo_token: { "${{ secrets.secrets.PERSONAL_ACCESS_TOKEN }}" }
+        REPO_TOKEN: { "${{ secrets.REPO_TOKEN }}" }
+        AWS_ACCESS_KEY_ID: { "${{ secrets.AWS_ACCESS_KEY_ID }}" }
+        AWS_SECRET_ACCESS_KEY: { "${{ secrets.AWS_SECRET_ACCESS_KEY }}" }
+        AWS_DEFAULT_REGION: us-east-1
+        AWS_EC2_METADATA_DISABLED: true
+        TB_CREDENTIALS: { "${{ secrets.TB_CREDENTIALS }}" }
       run: |
-        apt-get update -y
-        apt install imagemagick -y
+        sudo apt update && sudo apt install awscli
         pip install -r requirements.txt
         
-        # DVC stuff
-        git fetch --prune
-        dvc repro
-        
-        echo "# Style transfer" >> report.md
-        git show origin/master:final_owl.png > master_owl.png
-        convert +append final_owl.png master_owl.png out.png
-        convert out.png -resize 75%  out_shrink.png
-        echo "### Workspace vs. Main" >> report.md
-        cml-publish out_shrink.png --md --title 'compare' >> report.md
-        
-        echo "## Training metrics" >> report.md
-        dvc params diff master --show-md >> report.md
-        
-        echo >> report.md
-        echo "## GPU info" >> report.md
-        cat gpu_info.txt >> report.md
-        
-        cml-send-comment report.md 
+        <Tooltip type="tensorboard">
+        TB_URL="NOT READY"
+        </Tooltip>
+        <Tooltip type="reports">
+        echo "# CML report" > report.md
+        echo $TB_URL >> report.md
+        cml-send-comment --update report.md
+        </Tooltip>
+
+        <Tooltip type="dvc">
+        dvc pull || echo "First pull might fail"
+        dvc exp run
+        dvc push
+        </Tooltip>
+            
+        <Tooltip type="reports">
+        echo "# CML report" > report.md
+        <Tooltip type="pr">
+        cml-pr --md output/* >> report.md
+        </Tooltip>
+        echo $TB_URL >> report.md
+        cat output/metrics.txt >> report.md
+        cml-publish output/confusion_matrix.png --md >> report.md
+        cml-send-comment --update report.md
+        </Tooltip>
 ```
 
 <ExampleBox title="CML Report">
 
-[![GitHub Cloud report example](../src/media/github/cloud-report.png)](https://github.com/iterative/cml_cloud_case/pull/11)
+[![GitHub Base report example](../src/media/github/report.v2.png)](https://github.com/iterative/fashion-mnist)
 
 </ExampleBox>
 
@@ -739,8 +521,7 @@ jobs:
         )}
       />
     )
-  }
-]}/>
+  },]}/>
 
 </FullWidthBox>
 
